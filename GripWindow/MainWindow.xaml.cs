@@ -1,9 +1,8 @@
 ﻿using System;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
+using System.Runtime.InteropServices;
 
 namespace GripWindow
 {
@@ -12,11 +11,11 @@ namespace GripWindow
     /// </summary>
     public partial class MainWindow : Window
     {
-        private POINT? _prevPoint;
+        private Point? _prevPoint;
         private IntPtr? _movableWindow;
 
         //Rect取得用
-        private struct RECT
+        private struct Rect
         {
             public int left;
             public int top;
@@ -25,7 +24,7 @@ namespace GripWindow
         }
 
         //座標取得用
-        private struct POINT
+        private struct Point
         {
             public int x;
             public int y;
@@ -33,15 +32,15 @@ namespace GripWindow
 
         //ウィンドウのRect取得
         [DllImport("user32.dll")]
-        private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+        private static extern bool GetWindowRect(IntPtr hWnd, out Rect lpRect);
 
         //指定座標にあるウィンドウのハンドル取得
         [DllImport("user32.dll")]
-        private static extern IntPtr WindowFromPoint(POINT pOINT);
+        private static extern IntPtr WindowFromPoint(Point point);
 
         //マウスカーソルの位置取得
         [DllImport("user32.dll")]
-        private static extern bool GetCursorPos(out POINT lpPoint);
+        private static extern bool GetCursorPos(out Point lpPoint);
 
         // ウィンドウの移動
         // https://dobon.net/vb/dotnet/process/movewindow.html
@@ -66,16 +65,22 @@ namespace GripWindow
         {
             var isDownAlt = Keyboard.IsKeyDown(Key.LeftAlt) ||
                             Keyboard.IsKeyDown(Key.RightAlt);
-            //TODO: MoveWindowからAlt押しっぱなしでResizeWindowに移ったときの
-            if (isDownAlt)
+            var isDownShift = Keyboard.IsKeyDown(Key.LeftShift) ||
+                              Keyboard.IsKeyDown(Key.RightShift);
+            var isDownAltShift = isDownAlt && isDownShift;
+
+            if (isDownAltShift)
+            {
+                OnDownAltShift();
+            }
+            else if (isDownAlt)
             {
                 OnDownAlt();
             }
             else
             {
-                OnUpAlt();
+                OnKeyUp();
             }
-
         }
 
         private void OnDownAlt()
@@ -85,13 +90,33 @@ namespace GripWindow
             _prevPoint = cursorP;
         }
 
-        private void OnUpAlt()
+        private void OnKeyUp()
         {
             _movableWindow = null;
             _prevPoint = null;
         }
 
-        private void MoveWindow(POINT targetPoint)
+        private void OnDownAltShift()
+        {
+            GetCursorPos(out var cursorP);
+            ResizeWindow(cursorP);
+            _prevPoint = cursorP;
+        }
+
+        private void ResizeWindow(Point targetPoint)
+        {
+            _movableWindow ??= GetWindow();
+            _prevPoint ??= targetPoint;
+
+            GetWindowRect((IntPtr) _movableWindow, out var wRect);
+            var xDiff = targetPoint.x - _prevPoint.Value.x;
+            var yDiff = targetPoint.y - _prevPoint.Value.y;
+            var width = wRect.right - wRect.left + xDiff;
+            var height = wRect.bottom - wRect.top + yDiff;
+            MoveWindow((IntPtr) _movableWindow, wRect.left, wRect.top, width, height, 1);
+        }
+
+        private void MoveWindow(Point targetPoint)
         {
             _movableWindow ??= GetWindow();
             _prevPoint ??= targetPoint;
